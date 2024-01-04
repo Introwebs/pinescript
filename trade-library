@@ -1,0 +1,79 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Ste_Intro
+
+//@version=5
+
+// @description Libreria per gestire le operazioni
+library("TradeManage")
+
+// Gestione dei Trade aperti
+export type Trade
+
+    string id
+    int entryIndex
+    float entryPrice
+    float stopPrice
+    float tpPrice = na
+    line entryLine = na
+    line stopLine = na
+    line tpLine = na
+
+export method drawTrade(Trade this) =>
+    linefill.new(this.entryLine, this.stopLine, color.new(color.red,70))
+    if not na(this.tpLine)
+        linefill.new(this.entryLine, this.tpLine, color.new(color.teal, 70))
+
+// @function Rappresenta i Trade aperti come oggetti
+// @param _stopPrice Prezzo di Stop
+// @param _tpPrice Prezzo di Take Profit
+// @param _drawTrade Disegna i box delle operazioni
+// @param _tradeWidth Ampiezza dei box
+// @returns Oggeto Trade
+export f_trade(float _stopPrice, float _tpPrice=na, bool _drawTrade, int _tradeWidth) =>
+
+    Trade openTrade = Trade.new(
+         str.tostring(strategy.closedtrades + strategy.opentrades +1),
+         bar_index,
+         close,
+         _stopPrice,
+         _tpPrice,
+         _drawTrade ? line.new(bar_index, close, bar_index+_tradeWidth, close, xloc.bar_index, extend.none,na) : na,
+         _drawTrade ? line.new(bar_index, _stopPrice, bar_index+_tradeWidth, _stopPrice, xloc.bar_index, extend.none,na) : na,
+         _drawTrade and not na(_tpPrice) ? line.new(bar_index, _tpPrice, bar_index+_tradeWidth, _tpPrice, xloc.bar_index, extend.none,na) : na
+     )
+
+    if _drawTrade
+        openTrade.drawTrade()
+
+    openTrade
+
+
+// @function Calcola il trailing stop Basato sui pivot
+// @param _len Ampiezza dei pivot
+// @returns Trailing Stop Long, Trailing Stop Short
+export f_structureTrStop(int _len) =>
+
+    inLong  = strategy.position_size > 0
+    inShort = strategy.position_size < 0
+
+    var float provvStopL = 0.0
+    var float provvStopS = 1000000.0
+    var stopL = float(na)
+    var stopS = float(na)
+    pivL = ta.pivotlow  (_len, _len)
+    pivH = ta.pivothigh (_len, _len)
+    if not na(pivL) and pivL > provvStopL and inLong
+        provvStopL := pivL
+        stopL := pivL
+    if not na(pivH) and pivH < provvStopS and inShort
+        provvStopS := pivH
+        stopS := pivH
+
+    if ta.crossover(close, provvStopS)
+        provvStopS := 1000000.0
+        stopS := float(na)
+    if ta.crossunder(close, provvStopL)
+        provvStopL := 0.0
+        stopL := float(na)
+
+    [stopL, stopS]
